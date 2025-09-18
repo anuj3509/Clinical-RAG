@@ -109,7 +109,7 @@ class ClinicalTrialsRAG:
     
     def retrieve(self, query: str, n_results: int = 5) -> List[RetrievedDocument]:
         """
-        Retrieve relevant documents for a query
+        Retrieve relevant documents using hybrid search (exact match + vector similarity)
         
         Args:
             query: Search query
@@ -119,7 +119,73 @@ class ClinicalTrialsRAG:
             List of retrieved documents
         """
         try:
-            # Get query embedding using Voyage AI
+            # Check if query contains an NCT number
+            import re
+            nct_pattern = r'NCT\d{8}'
+            nct_matches = re.findall(nct_pattern, query.upper())
+            
+            if nct_matches:
+                # First, try exact NCT number match
+                nct_number = nct_matches[0]
+                
+                # Get all documents and check for exact NCT match
+                all_results = self.collection.get(
+                    include=['documents', 'metadatas']
+                )
+                
+                exact_matches = []
+                for i, metadata in enumerate(all_results['metadatas']):
+                    if metadata.get('nct_number') == nct_number:
+                        doc = RetrievedDocument(
+                            content=all_results['documents'][i],
+                            metadata=metadata,
+                            similarity_score=1.0,  # Perfect match
+                            nct_number=metadata.get('nct_number', 'Unknown'),
+                            study_title=metadata.get('study_title', 'Unknown')
+                        )
+                        exact_matches.append(doc)
+                
+                if exact_matches:
+                    # If we found exact matches, prioritize them but also get similar ones
+                    remaining_results = n_results - len(exact_matches)
+                    if remaining_results > 0:
+                        # Get vector similarity results
+                        query_embedding = self.voyage_client.embed(
+                            texts=[query],
+                            model="voyage-3",
+                            input_type="query"
+                        ).embeddings[0]
+                        
+                        vector_results = self.collection.query(
+                            query_embeddings=[query_embedding],
+                            n_results=remaining_results + len(exact_matches),
+                            include=['documents', 'metadatas', 'distances']
+                        )
+                        
+                        # Add non-duplicate vector results
+                        for i, (doc, metadata, distance) in enumerate(zip(
+                            vector_results['documents'][0],
+                            vector_results['metadatas'][0],
+                            vector_results['distances'][0]
+                        )):
+                            vector_nct = metadata.get('nct_number', '')
+                            if vector_nct != nct_number:  # Avoid duplicates
+                                similarity_score = 1 - distance
+                                retrieved_doc = RetrievedDocument(
+                                    content=doc,
+                                    metadata=metadata,
+                                    similarity_score=similarity_score,
+                                    nct_number=vector_nct,
+                                    study_title=metadata.get('study_title', 'Unknown')
+                                )
+                                exact_matches.append(retrieved_doc)
+                                if len(exact_matches) >= n_results:
+                                    break
+                    
+                    logger.info(f"Retrieved {len(exact_matches)} documents (hybrid search)")
+                    return exact_matches[:n_results]
+            
+            # Fallback to regular vector similarity search
             query_embedding = self.voyage_client.embed(
                 texts=[query],
                 model="voyage-3",
@@ -185,6 +251,7 @@ class ClinicalTrialsRAG:
             total_length += len(doc_text)
         
         context = "\n---\n".join(context_parts)
+        
         
         # Create prompt
         system_prompt = """You are an expert medical research assistant specializing in clinical trials. 
