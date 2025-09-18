@@ -6,20 +6,43 @@ for clinical trials data from CSV file.
 
 import os
 import pandas as pd
+import json
+import logging
+from typing import List, Dict, Any
+
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
+
+# Disable ChromaDB telemetry BEFORE importing chromadb
+os.environ['CHROMA_TELEMETRY_DISABLED'] = 'true'
+
 import chromadb
 from chromadb.config import Settings
 import voyageai
-from dotenv import load_dotenv
-from typing import List, Dict, Any
-import json
-import logging
+
+# Custom logging filter to suppress ChromaDB telemetry errors
+class ChromaDBTelemetryFilter(logging.Filter):
+    def filter(self, record):
+        # Filter out ChromaDB telemetry error messages
+        if "Failed to send telemetry event" in record.getMessage():
+            return False
+        if "capture() takes 1 positional argument but 3 were given" in record.getMessage():
+            return False
+        return True
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Suppress ChromaDB warnings and telemetry errors
+chromadb_logger = logging.getLogger('chromadb')
+chromadb_logger.setLevel(logging.ERROR)
+chromadb_logger.addFilter(ChromaDBTelemetryFilter())
+
+# Also apply filter to root logger to catch any stray messages
+root_logger = logging.getLogger()
+root_logger.addFilter(ChromaDBTelemetryFilter())
 
 class ClinicalTrialsVectorDB:
     def __init__(self, voyage_api_key: str = None, db_path: str = "./chroma_db"):

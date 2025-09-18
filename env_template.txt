@@ -1,0 +1,37 @@
+# Clinical Trials RAG System Configuration
+# Copy this file to .env and update with your actual API keys
+
+# Required API Keys
+VOYAGE_API_KEY=your_voyage_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional API Keys
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Database Configuration
+DB_PATH=./chroma_db
+COLLECTION_NAME=clinical_trials
+BACKUP_PATH=./backups
+
+# Model Configuration
+OPENAI_MODEL=gpt-3.5-turbo
+EMBEDDING_MODEL=voyage-3
+MAX_CONTEXT_LENGTH=4000
+TEMPERATURE=0.3
+MAX_TOKENS=1000
+
+# System Configuration
+LOG_LEVEL=INFO
+CACHE_ENABLED=true
+CACHE_TTL_SECONDS=3600
+
+# API Configuration
+MAX_RETRIES=3
+TIMEOUT_SECONDS=30
+RATE_LIMIT_RPM=60
+
+# ChromaDB Configuration - Set to true to disable telemetry and warnings
+CHROMA_TELEMETRY_DISABLED=true
+
+# Performance Tuning
+MAX_DOCUMENTS=10000
