@@ -11,25 +11,57 @@ import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
+
+# Disable ChromaDB telemetry BEFORE importing chromadb
+os.environ['CHROMA_TELEMETRY_DISABLED'] = 'true'
+
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich.markdown import Markdown
-from dotenv import load_dotenv
 
 import openai
 import voyageai
 import chromadb
 from chromadb.config import Settings
 
-# Load environment variables
-load_dotenv()
+# Custom logging filter to suppress ChromaDB telemetry errors
+class ChromaDBTelemetryFilter(logging.Filter):
+    def filter(self, record):
+        # Filter out ChromaDB telemetry error messages
+        if "Failed to send telemetry event" in record.getMessage():
+            return False
+        if "capture() takes 1 positional argument but 3 were given" in record.getMessage():
+            return False
+        return True
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging with custom configuration to suppress ChromaDB noise
+class QuietFormatter(logging.Formatter):
+    def format(self, record):
+        # Skip ChromaDB telemetry errors entirely
+        if "Failed to send telemetry event" in record.getMessage():
+            return ""
+        if "capture() takes 1 positional argument but 3 were given" in record.getMessage():
+            return ""
+        return super().format(record)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Apply custom formatter to suppress telemetry noise
+for handler in logging.root.handlers:
+    handler.setFormatter(QuietFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+    handler.addFilter(ChromaDBTelemetryFilter())
+
+# Suppress ChromaDB at logger level too
+chromadb_logger = logging.getLogger('chromadb')
+chromadb_logger.setLevel(logging.CRITICAL)  # Only show critical errors
 
 # Initialize console for rich output
 console = Console()
