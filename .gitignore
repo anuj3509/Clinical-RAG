@@ -1,2 +1,4 @@
 .env
 /venv/
+cleanup_db.py
+test_setup.py
